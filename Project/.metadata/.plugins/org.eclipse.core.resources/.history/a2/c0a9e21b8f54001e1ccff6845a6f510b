@@ -1,0 +1,156 @@
+/**
+ * @file  main.c
+ * @brief Projekat iz predmeta NSS, septembar 2023.
+ *
+ * Napisati program koji putem UARTa omogucava kontrolu osvetljaja odredjene LE diode.
+ * Za svaku diodu je moguce podesiti intenzitet osvetljaja (u opsegu od 0 do 99).
+ * Program na kontroleru, putem UARTa, dobija odgovarajuce kontrolne poruke koje sadrze identikator o diodi kao i njen intenzitet osvetljaja.
+ * Nakon primljene kontrolne poruke intenzitet osvetljaja LE diode se ispisuje na LE displeju.
+ *
+ * @date   septembar 2023.
+ * @author Danilo Ristic 0182/2019 (rd190182d@student.etf.bg.ac.rs)
+ *
+ */
+
+#include <msp430.h> 
+#include <stdint.h>
+#include "ETF_5529_HAL/hal_7seg.h"
+
+#define ASCII2DIGIT(x)      (x - '0') // Makro za konverziju ASCII vrednosti u broj
+#define DIGIT2ASCII(x)      (x + '0') // Makro za konverziju broja u ASCII vrednost
+
+#define PWM_PERIOD      327 // PWM period
+#define PWM_INITIAL_PW  150 // Inicijalni PW
+
+#define DISPLAY_REFRESH_PERIOD        (63)  // ~2ms jer tajmer koristi ACLK (32768Hz)
+
+volatile active_display_t   activeDisplay; // Koristi se za promenu aktivnog displeja.
+volatile uint8_t data; // Primljena poruka preko UARTa
+volatile uint8_t active_diode = 0; // Vrednost aktivne LE diode (0 - LE dioda 1, 1 - LE dioda 2)
+volatile uint8_t intensity_diode_1 = 0; // Primljena vrednost intenziteta osvetljaja LE diode 1
+volatile uint8_t intensity_diode_2 = 0; // Primljena vrednost intenziteta osvetljaja LE diode 2
+
+
+uint8_t     lowDigit; // niza cifra primljene poruke
+uint8_t     highDigit; // visa cifra primljene poruke
+
+/**
+ * funkcije za odredjivanje vise i nize cifre primljene poruke
+ */
+
+uint8_t getLowDigit(uint16_t number){
+    return (number - 10*(number/10));
+}
+uint8_t getHighDigit(uint16_t number){
+    return (number/10);
+}
+
+typedef enum{
+    DISP1,
+    DISP2
+}active_display;
+
+active_display activeDisplay; // sedmo-segmentni displej na kome trenutno ispisujemo cifru
+
+/**
+ * @brief Main function
+ *
+ * Demo uses ADC ISR to read conversion results
+ */
+int main(void)
+{
+    WDTCTL = WDTPW | WDTHOLD;   // Zaustavljanje watchdog tajmera
+
+    // Inicijalizacija sedmo-segmentnog displeja
+    HAL_7Seg_Init();
+    HAL_7SEG_DISPLAY_1_ON;
+    HAL_7SEG_DISPLAY_2_OFF;
+
+    // Inicijalizacija PW tajmera
+    P2DIR |= BIT4;              // P2.4 out
+    P2SEL |= BIT4;              // P2.4 use for TA
+    P2DIR |= BIT5;              // P2.5 out
+    P2SEL |= BIT5;              // P2.5 use for TA
+    TA2CCTL1 = OUTMOD_7;        // reset/set outmode
+    TA2CCTL2 = OUTMOD_7;        // reset/set outmode
+    TA2CCR0 = PWM_PERIOD;       // period
+    TA2CCR1 = PWM_INITIAL_PW;   // initial pulse width value
+    TA2CCR2 = PWM_INITIAL_PW;   // initial pulse width value
+    TA2CTL = TASSEL__ACLK | MC__UP ;
+
+    // Inicijalizacija tajmera
+    TA0CCR0 = 8192;                        // period is 0.5
+    TA0CCTL1 = OUTMOD_3;                    // use set/reset mode
+    TA0CCR1 = 4095;                         //
+    TA0CTL = TASSEL__ACLK | MC__UP;         // ACLK source, UP mode
+
+
+    /* initialize Timer A1 */
+    TA1CCR0     = DISPLAY_REFRESH_PERIOD;
+    TA1CCTL0    = CCIE;
+    TA1CTL      = TASSEL__ACLK | MC__UP;
+
+    __enable_interrupt();                   // GIE
+
+    while (1);
+}
+
+/**
+ * ADC ISR
+ *
+ * Read conversion result and display it on 7seg
+ */
+void __attribute__ ((interrupt(ADC12_VECTOR))) ADC12ISR (void)
+{
+    switch(__even_in_range(ADC12IV,34))
+    {
+    case  0: break;                           // Vector  0:  No interrupt
+    case  2: break;                           // Vector  2:  ADC overflow
+    case  4: break;                           // Vector  4:  ADC timing overflow
+    case  6:                                  // Vector  6:  ADC12IFG0
+        //HAL_7Seg_WriteHexDigit((ADC12MEM0 >> 8) & 0x0f);                            // display hex digit based on top 4 bits of result
+        TA2CCR1 = ((ADC12MEM0 >> 4) > PWM_PERIOD ) ? PWM_PERIOD : (ADC12MEM0 >> 4); // update pulse duty ratio
+      break;
+    case  8:                         // Vector  8:  ADC12IFG1
+        //HAL_7Seg_WriteHexDigit((ADC12MEM1 >> 8) & 0x0f);                            // display hex digit based on top 4 bits of result
+        TA2CCR2 = ((ADC12MEM1 >> 4) > PWM_PERIOD ) ? PWM_PERIOD : (ADC12MEM1 >> 4); // update pulse duty ratio
+        break;
+    case 10: break;                           // Vector 10:  ADC12IFG2
+    case 12: break;                           // Vector 12:  ADC12IFG3
+    case 14: break;                           // Vector 14:  ADC12IFG4
+    case 16: break;                           // Vector 16:  ADC12IFG5
+    case 18: break;                           // Vector 18:  ADC12IFG6
+    case 20: break;                           // Vector 20:  ADC12IFG7
+    case 22: break;                           // Vector 22:  ADC12IFG8
+    case 24: break;                           // Vector 24:  ADC12IFG9
+    case 26: break;                           // Vector 26:  ADC12IFG10
+    case 28: break;                           // Vector 28:  ADC12IFG11
+    case 30: break;                           // Vector 30:  ADC12IFG12
+    case 32: break;                           // Vector 32:  ADC12IFG13
+    case 34: break;                           // Vector 34:  ADC12IFG14
+    default: break;
+    }
+}
+/**
+ * @brief TIMERA0 Interrupt service routine
+ *
+ * ISR multiplexes LED display
+ */
+void __attribute__ ((interrupt(TIMER1_A0_VECTOR))) CCR0ISR (void)
+{
+    switch (activeDisplay)
+    {
+    case DISP1:
+        HAL_7SEG_DISPLAY_1_ON;
+        HAL_7SEG_DISPLAY_2_OFF;
+        HAL_7Seg_WriteHexDigit(ADC12MEM1>>8);
+        activeDisplay = DISP2;
+        break;
+    case DISP2:
+        HAL_7SEG_DISPLAY_1_OFF;
+        HAL_7SEG_DISPLAY_2_ON;
+        HAL_7Seg_WriteHexDigit(ADC12MEM0>>8);
+        activeDisplay = DISP1;
+        break;
+    }
+}

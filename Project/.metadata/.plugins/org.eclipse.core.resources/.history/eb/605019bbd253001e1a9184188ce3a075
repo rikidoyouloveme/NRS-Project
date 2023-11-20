@@ -1,0 +1,29 @@
+/**
+ * @file  main.c
+ * @brief Projekat iz predmeta NSS, septembar 2023.
+ *
+ * Napisati program koji putem UARTa omogucava kontrolu osvetljaja odredjene LE diode.
+ * Za svaku diodu je moguce podesiti intenzitet osvetljaja (u opsegu od 0 do 99).
+ * Program na kontroleru, putem UARTa, dobija odgovarajuce kontrolne poruke koje sadrze identikator o diodi kao i njen intenzitet osvetljaja.
+ * Nakon primljene kontrolne poruke intenzitet osvetljaja LE diode se ispisuje na LE displeju.
+ *
+ * @date   septembar 2023.
+ * @author Danilo Ristic 0182/2019 (rd190182d@student.etf.bg.ac.rs)
+ *
+ */
+
+#include <msp430.h> 
+#include <stdint.h>
+#include "ETF_5529_HAL/hal_7seg.h"
+
+
+
+int main(void)
+{
+	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
+
+
+
+    return 0;
+}
+

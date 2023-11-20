@@ -1,0 +1,26 @@
+/**
+ * @file  main.c
+ * @brief Demo Timer PWM LED
+ *
+ * In this example a button is used to change LED PWM duty ratio.
+ *
+ * @date   2021
+ * @author Haris Turkmanovic (haris@etf.rs)
+ *
+ */
+
+#include <msp430.h> 
+#include <stdint.h>
+#include "ETF_5529_HAL/hal_7seg.h"
+
+
+
+int main(void)
+{
+	WDTCTL = WDTPW | WDTHOLD;	// stop watchdog timer
+
+
+
+    return 0;
+}
+
